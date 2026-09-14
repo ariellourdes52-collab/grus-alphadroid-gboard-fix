@@ -4,7 +4,7 @@ KernelSU + meta-overlayfs workaround for the broken preinstalled Gboard on **Xia
 
 ## Problem
 
-On AlphaDroid 4.7, the preloaded Gboard is installed as:
+AlphaDroid 4.7 ships this Gboard preload:
 
 ```text
 package: com.android.inputmethod.latin
@@ -14,21 +14,13 @@ codePath=/product/app/LatinIMEGooglePrebuilt
 primaryCpuAbi=arm64-v8a
 ```
 
-The package remains enabled and visible to Package Manager, but after reboot the keyboard may fail to open/show.
+On the tested device, the package remains enabled and visible to Package Manager, but after reboot the keyboard may fail to open/show.
 
-Installing a newer Gboard as a normal `/data/app` update can work before reboot, but AlphaDroid may fall back to the broken preload after reboot.
+Installing a newer Gboard normally in `/data/app` can work before reboot, but AlphaDroid may fall back to the broken preload after reboot.
 
-## Tested workaround
+## Tested fix
 
-This project builds a **systemless KernelSU module** that replaces:
-
-```text
-/system/product/app/LatinIMEGooglePrebuilt
-```
-
-through **meta-overlayfs**, leaving the original `/product` partition untouched.
-
-Tested working replacement:
+The working replacement tested on real hardware is:
 
 ```text
 Gboard 18.1.4.962075747-release-armeabi-v7a
@@ -37,7 +29,15 @@ minSdk=26
 targetSdk=37
 ```
 
-After installation and reboot, Package Manager reports:
+The fix replaces the preload systemlessly through **KernelSU + meta-overlayfs** at:
+
+```text
+/system/product/app/LatinIMEGooglePrebuilt
+```
+
+The original `/product` partition is not modified.
+
+After reboot, the tested device reports:
 
 ```text
 codePath=/product/app/LatinIMEGooglePrebuilt
@@ -54,48 +54,62 @@ and Gboard continues working after reboot.
 - AlphaDroid 4.7
 - KernelSU / KernelSU-Next
 - meta-overlayfs installed and working
-- A compatible Gboard APK supplied by the user
-- Windows PowerShell 5.1+ or PowerShell 7+
+- A compatible **armeabi-v7a** Gboard APK supplied by the user
 
-## Why the APK is not included
+## Quick install — no PC builder required
 
-Gboard is proprietary software from Google. This repository does **not** redistribute the Gboard APK.
+The public installer ZIP does **not** contain Gboard. Gboard is proprietary Google software and is not redistributed by this project.
 
-Download a compatible APK from a source you trust, then use the included builder.
+1. Download a compatible **armeabi-v7a** Gboard APK from a source you trust.
+2. Rename the APK exactly to:
 
-The build tested on real hardware was:
+```text
+gboard.apk
+```
+
+3. Put it in the phone's internal storage:
+
+```text
+/Download/gboard.apk
+```
+
+which normally maps to:
+
+```text
+/sdcard/Download/gboard.apk
+```
+
+4. Download:
+
+```text
+releases/Grus-AlphaDroid-Gboard-Fix-v1.0-KernelSU.zip
+```
+
+5. Open **KernelSU → Modules → Install from storage** and select that ZIP.
+6. The installer checks that the phone is `grus`, finds `gboard.apk`, verifies that it is an APK and that it contains `armeabi-v7a` native libraries, then copies it into the systemless overlay.
+7. Reboot.
+
+The tested APK build is:
 
 ```text
 18.1.4.962075747-release-armeabi-v7a
 ```
 
-The Mi 9 SE supports `armeabi-v7a` apps even though its SoC is 64-bit.
+## Optional PC builder
 
-## Build the module
-
-1. Clone or download this repository.
-2. Put your Gboard APK somewhere on your PC.
-3. Open PowerShell in the repository directory.
-4. Run:
+The original PowerShell builder is still included. It creates a ZIP with your locally supplied APK already embedded:
 
 ```powershell
 .\build.ps1 -ApkPath "C:\path\to\gboard.apk"
 ```
 
-The script creates:
+Output:
 
 ```text
 out\Grus-AlphaDroid-Gboard-Fix-v1.0-KernelSU.zip
 ```
 
-## Install
-
-1. Make sure **meta-overlayfs** is already installed and active.
-2. Open KernelSU.
-3. Go to **Modules**.
-4. Choose **Install from storage**.
-5. Select the generated ZIP.
-6. Reboot.
+Do not redistribute a locally built ZIP that contains Gboard.
 
 ## Verify
 
@@ -104,8 +118,6 @@ From a PC with ADB:
 ```powershell
 .\adb.exe shell "dumpsys package com.android.inputmethod.latin | grep -E 'codePath|versionName|versionCode|primaryCpuAbi|flags='"
 ```
-
-Expected values should show the replacement Gboard as the system version.
 
 Also verify the selected IME:
 
@@ -121,16 +133,16 @@ com.android.inputmethod.latin/.LatinIME
 
 ## Emergency rollback
 
-If the keyboard fails or the device has trouble after installation, disable the module from ADB/root shell:
+Disable the module:
 
 ```sh
 su -c 'touch /data/adb/modules/gboard_factory/disable'
 reboot
 ```
 
-This exposes the original AlphaDroid preload again.
+This exposes the untouched AlphaDroid preload again.
 
-To re-enable the fix:
+Re-enable it with:
 
 ```sh
 su -c 'rm -f /data/adb/modules/gboard_factory/disable'
@@ -139,11 +151,12 @@ reboot
 
 ## Notes
 
-- This module is **systemless**. It does not permanently modify `/product`.
-- A full OTA may replace the ROM's original Gboard, but the module can continue overlaying it as long as KernelSU and meta-overlayfs still work after the update.
-- If a future AlphaDroid build includes a newer, working Gboard, remove or disable this module before deciding whether it is still needed.
-- This workaround was developed and tested on real Xiaomi Mi 9 SE hardware.
+- Module id: `gboard_factory`
+- The fix is **systemless** and does not permanently modify `/product`.
+- A full OTA can replace the ROM's original files. The overlay can continue working if KernelSU and meta-overlayfs still work after the OTA.
+- If a future AlphaDroid build includes a newer working Gboard, disable/remove this module before deciding whether it is still needed.
+- The public standalone installer is device-locked to `grus` for safety.
 
 ## Disclaimer
 
-Use at your own risk. Root modules can cause boot or input-method problems if used on unsupported ROMs/devices. Keep another input method available as a backup when testing.
+Use at your own risk. Root modules can cause boot or input-method problems when used on unsupported devices, ROMs or APK variants. Keep another input method available as a backup while testing.
