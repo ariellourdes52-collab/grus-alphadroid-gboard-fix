@@ -2,6 +2,8 @@
 
 KernelSU + meta-overlayfs workaround for the broken preinstalled Gboard on **Xiaomi Mi 9 SE (grus)** running **AlphaDroid 4.7**.
 
+**Author:** Ariel Torres | Instagram: **@draccesoriosrd**
+
 ## Problem
 
 AlphaDroid 4.7 ships this Gboard preload:
@@ -16,7 +18,7 @@ primaryCpuAbi=arm64-v8a
 
 On the tested device, the package remains enabled and visible to Package Manager, but after reboot the keyboard may fail to open/show.
 
-Installing a newer Gboard normally in `/data/app` can work before reboot, but AlphaDroid may fall back to the broken preload after reboot.
+Installing a newer Gboard normally in `/data/app` can work before reboot, but on the test device the ROM returned to the preload after reboot.
 
 ## Tested fix
 
@@ -37,16 +39,29 @@ The fix replaces the preload systemlessly through **KernelSU + meta-overlayfs** 
 
 The original `/product` partition is not modified.
 
-After reboot, the tested device reports:
+After reboot, the validated device reports:
 
 ```text
 codePath=/product/app/LatinIMEGooglePrebuilt
 primaryCpuAbi=armeabi-v7a
+versionCode=175963085 minSdk=26 targetSdk=37
 versionName=18.1.4.962075747-release-armeabi-v7a
-flags=[ SYSTEM ... ]
+flags=[ SYSTEM HAS_CODE ALLOW_CLEAR_USER_DATA ALLOW_BACKUP RESTORE_ANY_VERSION ]
 ```
 
-and Gboard continues working after reboot.
+The default IME remains:
+
+```text
+com.android.inputmethod.latin/.LatinIME
+```
+
+and the module contains the copied APK at:
+
+```text
+/data/adb/modules/gboard_factory/system/product/app/LatinIMEGooglePrebuilt/LatinIMEGooglePrebuilt.apk
+```
+
+The standalone installer was successfully tested after reboot on a real Xiaomi Mi 9 SE.
 
 ## Requirements
 
@@ -79,25 +94,76 @@ which normally maps to:
 /sdcard/Download/gboard.apk
 ```
 
-4. Download:
+4. Download the installer ZIP:
 
 ```text
 releases/Grus-AlphaDroid-Gboard-Fix-v1.0-KernelSU.zip
 ```
 
 5. Open **KernelSU → Modules → Install from storage** and select that ZIP.
-6. The installer checks that the phone is `grus`, finds `gboard.apk`, verifies that it is an APK and that it contains `armeabi-v7a` native libraries, then copies it into the systemless overlay.
+6. The installer checks that the device is `grus`, finds `gboard.apk`, verifies that it is a valid APK/ZIP and that it contains `armeabi-v7a` native libraries, then copies it into the systemless overlay.
 7. Reboot.
+8. Open a text field and confirm Gboard appears normally.
 
-The tested APK build is:
+The exact APK build validated on hardware is:
 
 ```text
 18.1.4.962075747-release-armeabi-v7a
 ```
 
+## Verify after reboot
+
+From a PC with ADB:
+
+```powershell
+.\adb.exe shell "dumpsys package com.android.inputmethod.latin | grep -E 'codePath|versionName|versionCode|primaryCpuAbi|flags='"
+```
+
+Expected key values:
+
+```text
+codePath=/product/app/LatinIMEGooglePrebuilt
+primaryCpuAbi=armeabi-v7a
+versionCode=175963085
+versionName=18.1.4.962075747-release-armeabi-v7a
+flags=[ SYSTEM ... ]
+```
+
+Check the selected IME:
+
+```powershell
+.\adb.exe shell "settings get secure default_input_method"
+```
+
+Expected:
+
+```text
+com.android.inputmethod.latin/.LatinIME
+```
+
+Check the APK copied into the active module:
+
+```powershell
+.\adb.exe shell "su -c 'ls -lh /data/adb/modules/gboard_factory/system/product/app/LatinIMEGooglePrebuilt/LatinIMEGooglePrebuilt.apk'"
+```
+
+A successful installation should show the Gboard APK there. The validated 18.1.4 build is about **66 MB**.
+
+## Updating an existing installation
+
+The module id is still:
+
+```text
+gboard_factory
+```
+
+If an older version of this fix is already working, install the new ZIP directly from KernelSU. There is normally no need to uninstall the old module first; KernelSU prepares the replacement and applies it after reboot.
+
+Make sure `/sdcard/Download/gboard.apk` exists before installing the standalone ZIP.
+
 ## Optional PC builder
 
-The original PowerShell builder is still included. It creates a ZIP with your locally supplied APK already embedded:
+The PowerShell builder is still included. It creates a private ZIP with your locally supplied APK already embedded:
 
 ```powershell
 .\build.ps1 -ApkPath "C:\path\to\gboard.apk"
@@ -110,26 +176,6 @@ out\Grus-AlphaDroid-Gboard-Fix-v1.0-KernelSU.zip
 ```
 
 Do not redistribute a locally built ZIP that contains Gboard.
-
-## Verify
-
-From a PC with ADB:
-
-```powershell
-.\adb.exe shell "dumpsys package com.android.inputmethod.latin | grep -E 'codePath|versionName|versionCode|primaryCpuAbi|flags='"
-```
-
-Also verify the selected IME:
-
-```powershell
-.\adb.exe shell "settings get secure default_input_method"
-```
-
-Expected:
-
-```text
-com.android.inputmethod.latin/.LatinIME
-```
 
 ## Emergency rollback
 
@@ -156,6 +202,7 @@ reboot
 - A full OTA can replace the ROM's original files. The overlay can continue working if KernelSU and meta-overlayfs still work after the OTA.
 - If a future AlphaDroid build includes a newer working Gboard, disable/remove this module before deciding whether it is still needed.
 - The public standalone installer is device-locked to `grus` for safety.
+- The repository intentionally does not include or redistribute the Gboard APK.
 
 ## Disclaimer
 
