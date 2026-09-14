@@ -1,0 +1,6 @@
+id=gboard_factory
+name=AlphaDroid Gboard Fix (grus)
+version=1.0
+versionCode=100
+author=ariellourdes52-collab
+description=Systemless replacement for the broken Gboard preload on Xiaomi Mi 9 SE (grus) running AlphaDroid 4.7. Requires KernelSU/KernelSU-Next and meta-overlayfs.
